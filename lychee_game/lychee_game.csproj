@@ -1,0 +1,27 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\..\FNA\FNA.csproj"/>
+        <ProjectReference Include="..\..\lychee\lychee\lychee.csproj"/>
+        <ProjectReference Include="..\..\lychee\lychee_sg\lychee_sg.csproj" OutputItemType="Analyzer"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <Folder Include="resources\2d\" />
+        <Folder Include="resources\input\" />
+        <Folder Include="systems\"/>
+        <Folder Include="systems\2d\" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <EmbeddedResource Include="shaders\*.spv" />
+    </ItemGroup>
+
+</Project>
