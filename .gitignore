@@ -8,3 +8,7 @@ riderModule.iml
 .idea/
 
 CLAUDE.md
+
+# Runtime DLLs in project roots
+/lychee_game.Demo/*.dll
+/lychee_game.Tests/*.dll
