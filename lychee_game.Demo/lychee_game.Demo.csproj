@@ -1,0 +1,16 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\lychee_game\lychee_game.csproj"/>
+        <ProjectReference Include="..\..\lychee\lychee_sg\lychee_sg.csproj" OutputItemType="Analyzer"/>
+    </ItemGroup>
+
+</Project>
