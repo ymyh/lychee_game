@@ -142,9 +142,6 @@ public sealed class LycheeGamePlugin(DefaultPluginDescriptor desc) : IPlugin
         StartUp = new(app, nameof(StartUp));
         app.AddSchedule(StartUp);
 
-        First = new(app, nameof(First));
-        app.AddSchedule(First);
-
         Input = new(app, nameof(Input));
         app.AddSchedule(Input);
 
@@ -169,9 +166,6 @@ public sealed class LycheeGamePlugin(DefaultPluginDescriptor desc) : IPlugin
 
         RenderUI = new(app, nameof(RenderUI));
         app.AddSchedule(RenderUI);
-
-        Last = new(app, nameof(Last));
-        app.AddSchedule(Last);
     }
 
 #endregion

@@ -34,23 +34,39 @@ public sealed class GpuDevice : IDisposable
 
     /// <summary>
     /// Creates a GPU device and claims the specified window for rendering.
+    /// Tries Vulkan (SPIRV) first, falls back to D3D12 (DXIL) if unsupported.
     /// </summary>
     /// <param name="window">The window to claim for GPU rendering.</param>
     /// <param name="debugMode">Whether to enable GPU debug mode.</param>
     public GpuDevice(Window window, bool debugMode = false)
     {
-        ShaderFormat = SelectShaderFormat(window.Backend);
-
-        if (!SDL.SDL_GPUSupportsShaderFormats(ShaderFormat, "lychee_game"))
+        // Try Vulkan (SPIRV) first, then D3D12 (DXIL)
+        var candidates = new[]
         {
-            throw new InvalidOperationException("GPU does not support required shader formats");
-        }
+            (SDL.SDL_GPUShaderFormat.SDL_GPU_SHADERFORMAT_SPIRV, "Vulkan"),
+            (SDL.SDL_GPUShaderFormat.SDL_GPU_SHADERFORMAT_DXIL, "D3D12")
+        };
 
-        Handle = SDL.SDL_CreateGPUDevice(ShaderFormat, debugMode, "lychee_game");
+        foreach (var (format, name) in candidates)
+        {
+            if (!SDL.SDL_GPUSupportsShaderFormats(format, "lychee_game"))
+            {
+                continue;
+            }
+
+            Handle = SDL.SDL_CreateGPUDevice(format, debugMode, "lychee_game");
+            if (Handle != IntPtr.Zero)
+            {
+                ShaderFormat = format;
+                Console.WriteLine($"[GpuDevice] Using {name} backend");
+                break;
+            }
+        }
 
         if (Handle == IntPtr.Zero)
         {
-            throw new InvalidOperationException($"Failed to create GPU device: {SDL.SDL_GetError()}");
+            throw new InvalidOperationException(
+                "GPU does not support SPIRV (Vulkan) or DXIL (D3D12) shader formats");
         }
 
         if (!SDL.SDL_ClaimWindowForGPUDevice(Handle, window.Handle))
@@ -277,18 +293,4 @@ public sealed class GpuDevice : IDisposable
 
 #endregion
 
-#region Private Static Methods
-
-    private static SDL.SDL_GPUShaderFormat SelectShaderFormat(RenderingBackend backend)
-    {
-        return backend switch
-        {
-            RenderingBackend.Vulkan => SDL.SDL_GPUShaderFormat.SDL_GPU_SHADERFORMAT_SPIRV,
-            RenderingBackend.D3D12 => SDL.SDL_GPUShaderFormat.SDL_GPU_SHADERFORMAT_DXIL,
-            RenderingBackend.Metal => SDL.SDL_GPUShaderFormat.SDL_GPU_SHADERFORMAT_MSL,
-            _ => throw new ArgumentOutOfRangeException(nameof(backend))
-        };
-    }
-
-#endregion
 }

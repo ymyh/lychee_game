@@ -22,6 +22,7 @@
 
     <ItemGroup>
         <EmbeddedResource Include="shaders\*.spv" />
+        <EmbeddedResource Include="shaders\*.dxil" />
     </ItemGroup>
 
 </Project>

@@ -51,7 +51,7 @@ public sealed class WindowDescriptor
     /// <summary>Whether the mouse cursor is visible in the window.</summary>
     public bool MouseVisible { get; init; } = true;
 
-    /// <summary>The GPU rendering backend to use.</summary>
+    /// <summary>The GPU rendering backend to use. Default is Vulkan.</summary>
     public RenderingBackend Backend { get; init; } = RenderingBackend.Vulkan;
 
     /// <summary>Whether the window uses high-DPI mode.</summary>

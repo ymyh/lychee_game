@@ -152,7 +152,7 @@ public sealed class BasicRenderPlugin(BasicRenderPluginDescriptor desc) : IPlugi
         renderUI.AddSystem(EndFrameSystem);
 
         // Create default resources in fixed order to occupy slot 0 of each pool (invariant)
-        CreateDefaultResources(meshList, textureList, effectList, materialList);
+        CreateDefaultResources(gpuDevice, meshList, textureList, effectList, materialList);
     }
 
 #endregion
@@ -170,7 +170,7 @@ public sealed class BasicRenderPlugin(BasicRenderPluginDescriptor desc) : IPlugi
 
 #region Private Methods
 
-    private void CreateDefaultResources(Mesh2DList meshes, Texture2DList textures,
+    private void CreateDefaultResources(GpuDevice device, Mesh2DList meshes, Texture2DList textures,
         EffectList effects, MaterialList materials)
     {
         // Order is fixed: Mesh→Texture→Effect→Material, each occupies slot 0
@@ -197,8 +197,8 @@ public sealed class BasicRenderPlugin(BasicRenderPluginDescriptor desc) : IPlugi
 
         DefaultEffect = effects.Create(new EffectDesc
         {
-            VertexSpv = DefaultShaders.DefaultVertexShader,
-            FragmentSpv = DefaultShaders.DefaultFragmentShader,
+            VertexSpv = DefaultShaders.GetVertexShader(device.ShaderFormat),
+            FragmentSpv = DefaultShaders.GetFragmentShader(device.ShaderFormat),
             Uniforms =
             [
                 new UniformDesc("MVP", UniformType.Mat4, 0),
@@ -219,14 +219,24 @@ public sealed class BasicRenderPlugin(BasicRenderPluginDescriptor desc) : IPlugi
 }
 
 /// <summary>
-/// Built-in SPIR-V shader bytecode for default rendering.
-/// Loads from embedded resources compiled from GLSL sources.
+/// Built-in shader bytecode for default rendering.
+/// Loads from embedded resources compiled from GLSL (SPIRV) or HLSL (DXIL).
 /// </summary>
 internal static class DefaultShaders
 {
-    internal static byte[] DefaultVertexShader => LoadEmbeddedShader("default_vert.spv");
+    internal static byte[] GetVertexShader(SDL.SDL_GPUShaderFormat format)
+    {
+        return LoadEmbeddedShader(format == SDL.SDL_GPUShaderFormat.SDL_GPU_SHADERFORMAT_DXIL
+            ? "default_vert.dxil"
+            : "default_vert.spv");
+    }
 
-    internal static byte[] DefaultFragmentShader => LoadEmbeddedShader("default_frag.spv");
+    internal static byte[] GetFragmentShader(SDL.SDL_GPUShaderFormat format)
+    {
+        return LoadEmbeddedShader(format == SDL.SDL_GPUShaderFormat.SDL_GPU_SHADERFORMAT_DXIL
+            ? "default_frag.dxil"
+            : "default_frag.spv");
+    }
 
     private static byte[] LoadEmbeddedShader(string resourceName)
     {
@@ -238,7 +248,7 @@ internal static class DefaultShaders
         {
             throw new InvalidOperationException(
                 $"Embedded shader '{fullName}' not found. " +
-                "Run shaders/compile.bat to compile GLSL to SPIR-V.");
+                "Run shaders/compile.bat to compile shaders.");
         }
 
         using var ms = new MemoryStream();

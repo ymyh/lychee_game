@@ -1,6 +1,5 @@
 using lychee;
 using lychee.attributes;
-using lychee.interfaces;
 using lychee_game.components._2d;
 
 namespace lychee_game.Demo;
