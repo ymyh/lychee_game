@@ -8,7 +8,11 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\..\FNA\FNA.csproj"/>
+        <!-- Force AnyCPU: win-x64 cannot load an FNA.dll built with 32BITREQUIRED (x86). -->
+        <ProjectReference Include="..\..\FNA\FNA.csproj">
+            <SetPlatform>Platform=AnyCPU</SetPlatform>
+            <AdditionalProperties>Platform=AnyCPU</AdditionalProperties>
+        </ProjectReference>
         <ProjectReference Include="..\..\lychee\lychee\lychee.csproj"/>
         <ProjectReference Include="..\..\lychee\lychee_sg\lychee_sg.csproj" OutputItemType="Analyzer"/>
     </ItemGroup>

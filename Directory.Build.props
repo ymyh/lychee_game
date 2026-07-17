@@ -1,0 +1,10 @@
+<Project>
+  <!--
+    SDK projects often pass an empty Platform into non-SDK references.
+    Keep solution/platform builds working, but default empty Platform to AnyCPU
+    so FNA is not accidentally built as x86 (32BITREQUIRED) for win-x64.
+  -->
+  <PropertyGroup>
+    <Platform Condition="'$(Platform)' == ''">AnyCPU</Platform>
+  </PropertyGroup>
+</Project>

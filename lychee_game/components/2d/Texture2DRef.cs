@@ -13,7 +13,7 @@ public partial struct Texture2DRef : IResourceRef, IEquatable<Texture2DRef>
 #region Public Fields
 
     /// <summary>
-    /// Index into the Texture2D resource pool. -1 means no texture.
+    /// Index into the Texture2D resource pool. Slot 0 is the default WhiteTexture.
     /// </summary>
     public int Index { get; set; }
 

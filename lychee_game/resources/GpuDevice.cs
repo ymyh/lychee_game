@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using lychee_game.resources._2d;
 using SDL = SDL3.SDL;
 
@@ -6,7 +7,7 @@ namespace lychee_game.resources;
 /// <summary>
 /// Wraps an SDL3 GPU device handle, providing resource creation and lifecycle management.
 /// </summary>
-public sealed class GpuDevice : IDisposable
+public sealed class GpuDevice
 {
 #region Public Properties
 
@@ -20,11 +21,20 @@ public sealed class GpuDevice : IDisposable
     /// </summary>
     public SDL.SDL_GPUShaderFormat ShaderFormat { get; }
 
+    /// <summary>
+    /// Depth/stencil texture format used for render pass depth targets.
+    /// D16_UNORM is the 2D convention (saves memory vs D32, sufficient precision).
+    /// </summary>
+    public SDL.SDL_GPUTextureFormat DepthFormat { get; } =
+        SDL.SDL_GPUTextureFormat.SDL_GPU_TEXTUREFORMAT_D16_UNORM;
+
 #endregion
 
 #region Private Fields
 
     private bool disposed;
+
+    private IntPtr windowHandle;
 
     private readonly Dictionary<SamplerState, IntPtr> samplerCache = [];
 
@@ -34,40 +44,30 @@ public sealed class GpuDevice : IDisposable
 
     /// <summary>
     /// Creates a GPU device and claims the specified window for rendering.
-    /// Tries Vulkan (SPIRV) first, falls back to D3D12 (DXIL) if unsupported.
+    /// Uses <see cref="Window.Backend"/> to select the SDL GPU driver and shader format.
     /// </summary>
     /// <param name="window">The window to claim for GPU rendering.</param>
     /// <param name="debugMode">Whether to enable GPU debug mode.</param>
-    public GpuDevice(Window window, bool debugMode = false)
+    /// <param name="presentMode">Swapchain present mode.</param>
+    public GpuDevice(Window window, bool debugMode = true,
+        SDL.SDL_GPUPresentMode presentMode = SDL.SDL_GPUPresentMode.SDL_GPU_PRESENTMODE_VSYNC)
     {
-        // Try Vulkan (SPIRV) first, then D3D12 (DXIL)
-        var candidates = new[]
-        {
-            (SDL.SDL_GPUShaderFormat.SDL_GPU_SHADERFORMAT_SPIRV, "Vulkan"),
-            (SDL.SDL_GPUShaderFormat.SDL_GPU_SHADERFORMAT_DXIL, "D3D12")
-        };
+        var (format, name) = ResolveBackend(window.Backend);
 
-        foreach (var (format, name) in candidates)
+        if (!SDL.SDL_GPUSupportsShaderFormats(format, name))
         {
-            if (!SDL.SDL_GPUSupportsShaderFormats(format, "lychee_game"))
-            {
-                continue;
-            }
-
-            Handle = SDL.SDL_CreateGPUDevice(format, debugMode, "lychee_game");
-            if (Handle != IntPtr.Zero)
-            {
-                ShaderFormat = format;
-                Console.WriteLine($"[GpuDevice] Using {name} backend");
-                break;
-            }
+            throw new InvalidOperationException(
+                $"GPU backend '{name}' (from Window.Backend={window.Backend}) is not supported on this system.");
         }
 
+        Handle = SDL.SDL_CreateGPUDevice(format, debugMode, name);
         if (Handle == IntPtr.Zero)
         {
             throw new InvalidOperationException(
-                "GPU does not support SPIRV (Vulkan) or DXIL (D3D12) shader formats");
+                $"Failed to create GPU device for backend '{name}': {SDL.SDL_GetError()}");
         }
+
+        ShaderFormat = format;
 
         if (!SDL.SDL_ClaimWindowForGPUDevice(Handle, window.Handle))
         {
@@ -75,9 +75,26 @@ public sealed class GpuDevice : IDisposable
             throw new InvalidOperationException($"Failed to claim window for GPU: {SDL.SDL_GetError()}");
         }
 
+        windowHandle = window.Handle;
+
         SDL.SDL_SetGPUSwapchainParameters(Handle, window.Handle,
             SDL.SDL_GPUSwapchainComposition.SDL_GPU_SWAPCHAINCOMPOSITION_SDR,
-            SDL.SDL_GPUPresentMode.SDL_GPU_PRESENTMODE_VSYNC);
+            presentMode);
+    }
+
+#endregion
+
+#region Private Static Methods
+
+    private static (SDL.SDL_GPUShaderFormat Format, string Name) ResolveBackend(RenderingBackend backend)
+    {
+        return backend switch
+        {
+            RenderingBackend.Vulkan => (SDL.SDL_GPUShaderFormat.SDL_GPU_SHADERFORMAT_SPIRV, "Vulkan"),
+            RenderingBackend.D3D12 => (SDL.SDL_GPUShaderFormat.SDL_GPU_SHADERFORMAT_DXIL, "D3D12"),
+            RenderingBackend.Metal => (SDL.SDL_GPUShaderFormat.SDL_GPU_SHADERFORMAT_MSL, "Metal"),
+            _ => throw new ArgumentOutOfRangeException(nameof(backend), backend, "Unsupported rendering backend.")
+        };
     }
 
 #endregion
@@ -99,6 +116,42 @@ public sealed class GpuDevice : IDisposable
     public void Submit(IntPtr commandBuffer)
     {
         SDL.SDL_SubmitGPUCommandBuffer(commandBuffer);
+    }
+
+    /// <summary>
+    /// Cancels an acquired command buffer without submitting (e.g. when swapchain acquire fails).
+    /// </summary>
+    /// <param name="commandBuffer">The command buffer to cancel.</param>
+    public void Cancel(IntPtr commandBuffer)
+    {
+        SDL.SDL_CancelGPUCommandBuffer(commandBuffer);
+    }
+
+    /// <summary>
+    /// Begins a GPU render pass with a depth/stencil target.
+    /// </summary>
+    /// <param name="commandBuffer">The current command buffer.</param>
+    /// <param name="colorTargets">Color target infos.</param>
+    /// <param name="depthTarget">Depth/stencil target info.</param>
+    /// <returns>The render pass handle.</returns>
+    public IntPtr BeginRenderPass(IntPtr commandBuffer, SDL.SDL_GPUColorTargetInfo[] colorTargets,
+        ref SDL.SDL_GPUDepthStencilTargetInfo depthTarget)
+    {
+        return SDL.SDL_BeginGPURenderPass(commandBuffer, colorTargets, (uint)colorTargets.Length,
+            ref depthTarget);
+    }
+
+    /// <summary>
+    /// Begins a GPU render pass with color targets only (no depth/stencil attachment).
+    /// </summary>
+    /// <param name="commandBuffer">The current command buffer.</param>
+    /// <param name="colorTargets">Color target infos.</param>
+    /// <returns>The render pass handle.</returns>
+    public IntPtr BeginRenderPass(IntPtr commandBuffer, SDL.SDL_GPUColorTargetInfo[] colorTargets)
+    {
+        // SDL3-CS only exposes a ref depth parameter; pass NULL via a matching native signature.
+        return BeginGPURenderPassNoDepth(commandBuffer, colorTargets, (uint)colorTargets.Length,
+            IntPtr.Zero);
     }
 
     /// <summary>
@@ -128,49 +181,57 @@ public sealed class GpuDevice : IDisposable
     /// <summary>
     /// Creates a GPU shader from the specified create info.
     /// </summary>
+    /// <exception cref="InvalidOperationException">Thrown when SDL returns a null handle.</exception>
     public IntPtr CreateShader(ref SDL.SDL_GPUShaderCreateInfo ci)
     {
-        return SDL.SDL_CreateGPUShader(Handle, ref ci);
+        return CheckHandle(SDL.SDL_CreateGPUShader(Handle, ref ci), "SDL_CreateGPUShader");
     }
 
     /// <summary>
     /// Creates a GPU graphics pipeline from the specified create info.
     /// </summary>
+    /// <exception cref="InvalidOperationException">Thrown when SDL returns a null handle.</exception>
     public IntPtr CreatePipeline(ref SDL.SDL_GPUGraphicsPipelineCreateInfo ci)
     {
-        return SDL.SDL_CreateGPUGraphicsPipeline(Handle, ref ci);
+        return CheckHandle(SDL.SDL_CreateGPUGraphicsPipeline(Handle, ref ci),
+            "SDL_CreateGPUGraphicsPipeline");
     }
 
     /// <summary>
     /// Creates a GPU sampler from the specified create info.
     /// </summary>
+    /// <exception cref="InvalidOperationException">Thrown when SDL returns a null handle.</exception>
     public IntPtr CreateSampler(ref SDL.SDL_GPUSamplerCreateInfo ci)
     {
-        return SDL.SDL_CreateGPUSampler(Handle, ref ci);
+        return CheckHandle(SDL.SDL_CreateGPUSampler(Handle, ref ci), "SDL_CreateGPUSampler");
     }
 
     /// <summary>
     /// Creates a GPU texture from the specified create info.
     /// </summary>
+    /// <exception cref="InvalidOperationException">Thrown when SDL returns a null handle.</exception>
     public IntPtr CreateTexture(ref SDL.SDL_GPUTextureCreateInfo ci)
     {
-        return SDL.SDL_CreateGPUTexture(Handle, ref ci);
+        return CheckHandle(SDL.SDL_CreateGPUTexture(Handle, ref ci), "SDL_CreateGPUTexture");
     }
 
     /// <summary>
     /// Creates a GPU buffer from the specified create info.
     /// </summary>
+    /// <exception cref="InvalidOperationException">Thrown when SDL returns a null handle.</exception>
     public IntPtr CreateBuffer(ref SDL.SDL_GPUBufferCreateInfo ci)
     {
-        return SDL.SDL_CreateGPUBuffer(Handle, ref ci);
+        return CheckHandle(SDL.SDL_CreateGPUBuffer(Handle, ref ci), "SDL_CreateGPUBuffer");
     }
 
     /// <summary>
     /// Creates a GPU transfer buffer from the specified create info.
     /// </summary>
+    /// <exception cref="InvalidOperationException">Thrown when SDL returns a null handle.</exception>
     public IntPtr CreateTransferBuffer(ref SDL.SDL_GPUTransferBufferCreateInfo ci)
     {
-        return SDL.SDL_CreateGPUTransferBuffer(Handle, ref ci);
+        return CheckHandle(SDL.SDL_CreateGPUTransferBuffer(Handle, ref ci),
+            "SDL_CreateGPUTransferBuffer");
     }
 
     /// <summary>
@@ -179,9 +240,11 @@ public sealed class GpuDevice : IDisposable
     /// <param name="tb">The transfer buffer to map.</param>
     /// <param name="cycle">Whether to cycle the buffer.</param>
     /// <returns>A pointer to the mapped memory.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when SDL returns a null pointer.</exception>
     public IntPtr MapTransfer(IntPtr tb, bool cycle)
     {
-        return SDL.SDL_MapGPUTransferBuffer(Handle, tb, cycle);
+        return CheckHandle(SDL.SDL_MapGPUTransferBuffer(Handle, tb, cycle),
+            "SDL_MapGPUTransferBuffer");
     }
 
     /// <summary>
@@ -267,10 +330,31 @@ public sealed class GpuDevice : IDisposable
 
 #endregion
 
-#region IDisposable Implementation
+#region Private Methods
 
-    /// <inheritdoc/>
-    public void Dispose()
+    [DllImport("SDL3", CallingConvention = CallingConvention.Cdecl, EntryPoint = "SDL_BeginGPURenderPass")]
+    private static extern IntPtr BeginGPURenderPassNoDepth(IntPtr commandBuffer,
+        SDL.SDL_GPUColorTargetInfo[] colorTargets, uint numColorTargets, IntPtr depthStencilTargetInfo);
+
+    private static IntPtr CheckHandle(IntPtr handle, string operation)
+    {
+        if (handle == IntPtr.Zero)
+        {
+            throw new InvalidOperationException($"{operation} failed: {SDL.SDL_GetError()}");
+        }
+
+        return handle;
+    }
+
+#endregion
+
+#region Public Methods
+
+    /// <summary>
+    /// Releases samplers, detaches the window, and destroys the GPU device.
+    /// Must only be called after all device-owned GPU resources have been released.
+    /// </summary>
+    public void Destroy()
     {
         if (disposed)
         {
@@ -279,16 +363,25 @@ public sealed class GpuDevice : IDisposable
 
         disposed = true;
 
-        if (Handle != IntPtr.Zero)
+        if (Handle == IntPtr.Zero)
         {
-            foreach (var sampler in samplerCache.Values)
-            {
-                SDL.SDL_ReleaseGPUSampler(Handle, sampler);
-            }
-            samplerCache.Clear();
-
-            SDL.SDL_DestroyGPUDevice(Handle);
+            return;
         }
+
+        foreach (var sampler in samplerCache.Values)
+        {
+            SDL.SDL_ReleaseGPUSampler(Handle, sampler);
+        }
+
+        samplerCache.Clear();
+
+        if (windowHandle != IntPtr.Zero)
+        {
+            SDL.SDL_ReleaseWindowFromGPUDevice(Handle, windowHandle);
+            windowHandle = IntPtr.Zero;
+        }
+
+        SDL.SDL_DestroyGPUDevice(Handle);
     }
 
 #endregion

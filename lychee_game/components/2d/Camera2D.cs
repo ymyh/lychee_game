@@ -7,6 +7,8 @@ namespace lychee_game.components._2d;
 /// <summary>
 /// 2D camera component for world-space rendering with orthographic projection.
 /// Origin is centered, Y-axis points up.
+/// Must be created via <c>new Camera2D()</c> so Zoom defaults to 1.0.
+/// Do not use <c>default(Camera2D)</c> — it bypasses the constructor.
 /// </summary>
 [Component]
 public partial struct Camera2D
@@ -24,9 +26,23 @@ public partial struct Camera2D
     public float Rotation;
 
     /// <summary>
-    /// Camera zoom level. Default is 1.0.
+    /// Camera zoom level. Default is 1.0 when constructed via <c>new Camera2D()</c>.
     /// </summary>
     public float Zoom;
+
+#endregion
+
+#region Constructor
+
+    /// <summary>
+    /// Creates a Camera2D at the origin with unit zoom and zero rotation.
+    /// </summary>
+    public Camera2D()
+    {
+        Position = default;
+        Rotation = 0.0f;
+        Zoom = 1.0f;
+    }
 
 #endregion
 

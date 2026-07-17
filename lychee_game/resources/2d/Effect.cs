@@ -126,12 +126,12 @@ public sealed class Effect
     /// <summary>
     /// GPU vertex shader handle.
     /// </summary>
-    public IntPtr VertexShader { get; }
+    public IntPtr VertexShader { get; private set; }
 
     /// <summary>
     /// GPU fragment shader handle.
     /// </summary>
-    public IntPtr FragmentShader { get; }
+    public IntPtr FragmentShader { get; private set; }
 
     /// <summary>
     /// Uniform parameter descriptors.
@@ -193,7 +193,7 @@ public sealed class Effect
                         num_samplers = desc.FragmentSamplerCount,
                         num_storage_textures = 0,
                         num_storage_buffers = 0,
-                        num_uniform_buffers = 1
+                        num_uniform_buffers = 0
                     };
                     FragmentShader = device.CreateShader(ref fragmentCi);
                 }
@@ -206,12 +206,34 @@ public sealed class Effect
     }
 
 #endregion
+
+#region Internal Methods
+
+    /// <summary>
+    /// Releases GPU shader handles owned by this effect.
+    /// </summary>
+    internal void ReleaseGpu(GpuDevice gpuDevice)
+    {
+        if (VertexShader != IntPtr.Zero)
+        {
+            gpuDevice.ReleaseShader(VertexShader);
+            VertexShader = IntPtr.Zero;
+        }
+
+        if (FragmentShader != IntPtr.Zero)
+        {
+            gpuDevice.ReleaseShader(FragmentShader);
+            FragmentShader = IntPtr.Zero;
+        }
+    }
+
+#endregion
 }
 
 /// <summary>
-/// Resource pool for Effect assets.
+/// Asset pool for Effect resources.
 /// </summary>
-public sealed class EffectList : ResourcePool<Effect, components._2d.EffectRef>
+public sealed class EffectList : AssetPool<Effect, components._2d.EffectRef>
 {
 #region Private Fields
 
@@ -237,6 +259,12 @@ public sealed class EffectList : ResourcePool<Effect, components._2d.EffectRef>
     protected override components._2d.EffectRef MakeRef(int index, uint generation)
     {
         return new components._2d.EffectRef { Index = index, Generation = generation };
+    }
+
+    /// <inheritdoc/>
+    protected override void OnRelease(Effect slot)
+    {
+        ReleaseEffectGpu(slot);
     }
 
 #endregion
@@ -265,12 +293,33 @@ public sealed class EffectList : ResourcePool<Effect, components._2d.EffectRef>
     }
 
     /// <summary>
-    /// Releases the effect associated with the specified reference.
+    /// Releases the effect and its GPU shaders associated with the reference.
     /// </summary>
     /// <param name="ref">The effect reference to release.</param>
     public new void Release(components._2d.EffectRef @ref)
     {
         base.Release(@ref);
+    }
+
+    /// <summary>
+    /// Releases all GPU shaders for effects in this pool.
+    /// Call before destroying the GPU device.
+    /// </summary>
+    public void ReleaseGpuResources()
+    {
+        foreach (var effect in All)
+        {
+            ReleaseEffectGpu(effect);
+        }
+    }
+
+#endregion
+
+#region Private Methods
+
+    private void ReleaseEffectGpu(Effect effect)
+    {
+        effect.ReleaseGpu(device);
     }
 
 #endregion

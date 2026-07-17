@@ -14,19 +14,30 @@ public partial class EndFrameSystem
 {
 #region Execute
 
-    private static void Execute([Resource] RenderContext ctx, [Resource] RenderQueue queue)
+    private static void Execute([Resource] GpuDevice device, [Resource] RenderContext ctx,
+        [Resource] RenderQueue queue, [Resource] SpriteInstanceBuffer instances)
     {
-        if (!ctx.FrameActive)
+        if (ctx.FrameActive)
         {
-            return;
+            SDL.SDL_EndGPURenderPass(ctx.RenderPass);
+            SDL.SDL_SubmitGPUCommandBuffer(ctx.CommandBuffer);
+
+            Console.WriteLine($"[Render] drawCalls={ctx.DrawCallCount} sprites={queue.Records.Count}");
+
+            ctx.FrameActive = false;
+            ctx.RenderPass = IntPtr.Zero;
+            ctx.CommandBuffer = IntPtr.Zero;
+            ctx.SwapchainTexture = IntPtr.Zero;
+        }
+        else if (ctx.CommandBuffer != IntPtr.Zero)
+        {
+            device.Cancel(ctx.CommandBuffer);
+            ctx.CommandBuffer = IntPtr.Zero;
+            ctx.SwapchainTexture = IntPtr.Zero;
         }
 
-        SDL.SDL_EndGPURenderPass(ctx.RenderPass);
-        SDL.SDL_SubmitGPUCommandBuffer(ctx.CommandBuffer);
-
-        ctx.FrameActive = false;
-        ctx.RenderPass = IntPtr.Zero;
         queue.Clear();
+        instances.Clear();
     }
 
 #endregion

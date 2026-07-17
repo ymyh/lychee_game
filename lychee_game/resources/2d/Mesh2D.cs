@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using GpuDevice = lychee_game.resources.GpuDevice;
 
 namespace lychee_game.resources._2d;
 
@@ -76,13 +77,35 @@ public sealed class Mesh2D
     /// <summary>
     /// Creates a Mesh2D from the specified descriptor.
     /// </summary>
+    /// <exception cref="ArgumentNullException">Thrown when vertices or indices are null.</exception>
+    /// <exception cref="ArgumentException">Thrown when vertices are empty or an index is out of range.</exception>
     internal Mesh2D(Mesh2DDesc desc)
     {
+        ArgumentNullException.ThrowIfNull(desc.Vertices);
+        ArgumentNullException.ThrowIfNull(desc.Indices);
+
+        if (desc.Vertices.Length == 0)
+        {
+            throw new ArgumentException("Mesh must contain at least one vertex.", nameof(desc));
+        }
+
         VertexCount = desc.Vertices.Length;
         VertexData = MemoryMarshal.AsBytes(desc.Vertices.AsSpan()).ToArray();
 
         if (desc.Indices.Length > 0)
         {
+            for (var i = 0; i < desc.Indices.Length; i++)
+            {
+                var index = desc.Indices[i];
+                if (index < 0 || index >= VertexCount)
+                {
+                    throw new ArgumentException(
+                        $"Mesh index out of range at Indices[{i}]={index}; " +
+                        $"valid range is [0, {VertexCount}).",
+                        nameof(desc));
+                }
+            }
+
             IndexCount = desc.Indices.Length;
             IndexData = MemoryMarshal.AsBytes(desc.Indices.AsSpan()).ToArray();
             Indexed = true;
@@ -93,16 +116,48 @@ public sealed class Mesh2D
 }
 
 /// <summary>
-/// Resource pool for Mesh2D assets.
+/// Asset pool for Mesh2D resources.
 /// </summary>
-public sealed class Mesh2DList : ResourcePool<Mesh2D, components._2d.Mesh2DRef>
+public sealed class Mesh2DList : AssetPool<Mesh2D, components._2d.Mesh2DRef>
 {
+#region Private Fields
+
+    private readonly GpuDevice? device;
+
+#endregion
+
+#region Constructor
+
+    /// <summary>
+    /// Creates a Mesh2DList without a GPU device (CPU-only tests).
+    /// Releasing an uploaded mesh requires the device overload constructor.
+    /// </summary>
+    public Mesh2DList()
+    {
+    }
+
+    /// <summary>
+    /// Creates a Mesh2DList that releases GPU buffers when slots are recycled.
+    /// </summary>
+    public Mesh2DList(GpuDevice device)
+    {
+        this.device = device;
+    }
+
+#endregion
+
 #region Protected Methods
 
     /// <inheritdoc/>
     protected override components._2d.Mesh2DRef MakeRef(int index, uint generation)
     {
         return new components._2d.Mesh2DRef { Index = index, Generation = generation };
+    }
+
+    /// <inheritdoc/>
+    protected override void OnRelease(Mesh2D slot)
+    {
+        ReleaseMeshGpu(slot);
     }
 
 #endregion
@@ -131,12 +186,58 @@ public sealed class Mesh2DList : ResourcePool<Mesh2D, components._2d.Mesh2DRef>
     }
 
     /// <summary>
-    /// Releases the mesh associated with the specified reference.
+    /// Releases the mesh and any uploaded GPU buffers associated with the reference.
     /// </summary>
     /// <param name="ref">The mesh reference to release.</param>
     public new void Release(components._2d.Mesh2DRef @ref)
     {
         base.Release(@ref);
+    }
+
+    /// <summary>
+    /// Releases all uploaded GPU buffers for meshes in this pool.
+    /// Call before destroying the GPU device.
+    /// </summary>
+    public void ReleaseGpuResources()
+    {
+        foreach (var mesh in All)
+        {
+            ReleaseMeshGpu(mesh);
+        }
+    }
+
+#endregion
+
+#region Private Methods
+
+    private void ReleaseMeshGpu(Mesh2D mesh)
+    {
+        if (mesh.GpuVertexBuffer == IntPtr.Zero && mesh.GpuIndexBuffer == IntPtr.Zero)
+        {
+            mesh.Uploaded = false;
+            return;
+        }
+
+        if (device == null)
+        {
+            throw new InvalidOperationException(
+                "Mesh2DList has no GpuDevice; cannot release uploaded GPU buffers. " +
+                "Construct Mesh2DList with a GpuDevice.");
+        }
+
+        if (mesh.GpuVertexBuffer != IntPtr.Zero)
+        {
+            device.ReleaseBuffer(mesh.GpuVertexBuffer);
+            mesh.GpuVertexBuffer = IntPtr.Zero;
+        }
+
+        if (mesh.GpuIndexBuffer != IntPtr.Zero)
+        {
+            device.ReleaseBuffer(mesh.GpuIndexBuffer);
+            mesh.GpuIndexBuffer = IntPtr.Zero;
+        }
+
+        mesh.Uploaded = false;
     }
 
 #endregion

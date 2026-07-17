@@ -46,19 +46,28 @@ public sealed class BasicRenderPlugin(BasicRenderPluginDescriptor desc) : IPlugi
 
     private PipelineCache? pipelineCache;
 
+    private RenderContext? renderContext;
+
+    private Mesh2DList? meshList;
+
+    private Texture2DList? textureList;
+
+    private EffectList? effectList;
+
+    private SpriteInstanceBuffer? instanceBuffer;
+
+    private GpuUploadBuffer? uploadBuffer;
+
+    private bool disposed;
+
 #endregion
 
 #region Public Fields
 
     /// <summary>
-    /// System that acquires swapchain and begins render pass.
+    /// System that acquires the command buffer and uploads mesh/texture resources.
     /// </summary>
     public readonly BeginFrameSystem BeginFrameSystem = new();
-
-    /// <summary>
-    /// System that ends render pass and submits command buffer.
-    /// </summary>
-    public readonly EndFrameSystem EndFrameSystem = new();
 
     /// <summary>
     /// System that updates the camera view-projection matrix.
@@ -71,9 +80,24 @@ public sealed class BasicRenderPlugin(BasicRenderPluginDescriptor desc) : IPlugi
     public readonly SpriteRecordSystem SpriteRecordSystem = new();
 
     /// <summary>
-    /// System that submits draw commands to the GPU.
+    /// System that uploads sprite instance data before the render pass.
+    /// </summary>
+    public readonly SpriteInstanceUploadSystem SpriteInstanceUploadSystem = new();
+
+    /// <summary>
+    /// System that begins the GPU render pass.
+    /// </summary>
+    public readonly BeginRenderPassSystem BeginRenderPassSystem = new();
+
+    /// <summary>
+    /// System that submits instanced draw commands to the GPU.
     /// </summary>
     public readonly SpriteSubmitSystem SpriteSubmitSystem = new();
+
+    /// <summary>
+    /// System that ends render pass and submits command buffer.
+    /// </summary>
+    public readonly EndFrameSystem EndFrameSystem = new();
 
 #endregion
 
@@ -123,35 +147,38 @@ public sealed class BasicRenderPlugin(BasicRenderPluginDescriptor desc) : IPlugi
         }
 
         var window = app.GetResource<Window>();
-        gpuDevice = new GpuDevice(window, desc.DebugMode);
+        gpuDevice = new GpuDevice(window, desc.DebugMode, desc.PresentMode);
         pipelineCache = new PipelineCache(gpuDevice);
+        renderContext = new RenderContext();
 
-        // Register resources
         app.AddResource(gpuDevice);
-        app.AddResource<RenderContext>();
+        app.AddResource(renderContext);
         app.AddResource(pipelineCache);
 
-        var meshList = new Mesh2DList();
-        var textureList = new Texture2DList();
-        var effectList = new EffectList(gpuDevice);
+        meshList = new Mesh2DList(gpuDevice);
+        textureList = new Texture2DList(gpuDevice);
+        effectList = new EffectList(gpuDevice);
         var materialList = new MaterialList();
+
+        instanceBuffer = new SpriteInstanceBuffer();
+        uploadBuffer = new GpuUploadBuffer();
 
         app.AddResource(meshList);
         app.AddResource(textureList);
         app.AddResource(effectList);
         app.AddResource(materialList);
         app.AddResource<RenderQueue>();
+        app.AddResource(instanceBuffer);
+        app.AddResource(uploadBuffer);
 
-        // Get render schedule and add systems
         var render = app.GetSchedule<DefaultSchedule>("Render")!;
-        render.AddSystems<(BeginFrameSystem, CameraUpdateSystem,
-            SpriteRecordSystem, SpriteSubmitSystem)>();
+        render.AddSystems<(BeginFrameSystem, CameraUpdateSystem, SpriteRecordSystem,
+            SpriteInstanceUploadSystem, BeginRenderPassSystem, SpriteSubmitSystem)>();
 
-        // Add EndFrameSystem to RenderUI schedule (runs after Render)
         var renderUI = app.GetSchedule<DefaultSchedule>("RenderUI")!;
         renderUI.AddSystem(EndFrameSystem);
 
-        // Create default resources in fixed order to occupy slot 0 of each pool (invariant)
+        // Fixed order occupies slot 0 of each pool (invariant).
         CreateDefaultResources(gpuDevice, meshList, textureList, effectList, materialList);
     }
 
@@ -162,8 +189,34 @@ public sealed class BasicRenderPlugin(BasicRenderPluginDescriptor desc) : IPlugi
     /// <inheritdoc/>
     public void Dispose()
     {
+        if (disposed)
+        {
+            return;
+        }
+
+        disposed = true;
+
+        if (gpuDevice == null)
+        {
+            return;
+        }
+
+        // Pipelines reference shaders; release GPU objects before destroying the device.
         pipelineCache?.DestroyAll();
-        gpuDevice?.Dispose();
+        instanceBuffer?.Destroy(gpuDevice);
+        uploadBuffer?.Destroy(gpuDevice);
+        meshList?.ReleaseGpuResources();
+        textureList?.ReleaseGpuResources();
+        effectList?.ReleaseGpuResources();
+
+        if (renderContext != null && renderContext.DepthTexture != IntPtr.Zero)
+        {
+            gpuDevice.ReleaseTexture(renderContext.DepthTexture);
+            renderContext.DepthTexture = IntPtr.Zero;
+        }
+
+        gpuDevice.Destroy();
+        gpuDevice = null;
     }
 
 #endregion
@@ -201,10 +254,9 @@ public sealed class BasicRenderPlugin(BasicRenderPluginDescriptor desc) : IPlugi
             FragmentSpv = DefaultShaders.GetFragmentShader(device.ShaderFormat),
             Uniforms =
             [
-                new UniformDesc("MVP", UniformType.Mat4, 0),
-                new UniformDesc("Tint", UniformType.Vec4, 64)
+                new UniformDesc("ViewProjection", UniformType.Mat4, 0)
             ],
-            UniformBufferSize = 80,
+            UniformBufferSize = 64,
             FragmentSamplerCount = 1
         });
 

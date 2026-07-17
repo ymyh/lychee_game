@@ -1,3 +1,4 @@
+using System.Numerics;
 using lychee;
 using lychee.attributes;
 using lychee_game.components._2d;
@@ -6,7 +7,7 @@ namespace lychee_game.Demo;
 
 /// <summary>
 /// One-time startup system that creates the demo scene:
-/// a main camera and a default sprite (white quad).
+/// a main camera and 100 randomly placed white quads.
 /// </summary>
 [AutoImplSystem]
 public partial class DemoSetupSystem
@@ -15,17 +16,29 @@ public partial class DemoSetupSystem
 
     private static void Execute(Commands commands)
     {
-        // Create main camera entity
         var camera = commands.CreateEntity();
-        camera.AddComponent(new Camera2D { Zoom = 1.0f });
+        camera.AddComponent(new Camera2D());
         camera.AddComponent(new MainCamera());
 
-        // Create a sprite entity with all defaults:
-        // Mesh=UnitQuad[0], Material=DefaultMaterial[0], Texture=WhiteTexture[0], Tint=White
-        var sprite = commands.CreateEntity();
-        sprite.AddComponent(new Sprite2D());
-        sprite.AddComponent(new Transform2D());
-        sprite.AddComponent(new ZIndex());
+        // Camera orthographic matches window pixels (default 1280x720): visible ~[-640,640] x [-360,360].
+        var rng = new Random(42);
+        for (var n = 0; n < 100; n++)
+        {
+            var size = 16.0f + rng.NextSingle() * 32.0f;
+            var sprite = commands.CreateEntity();
+            sprite.AddComponent(new Sprite2D());
+            sprite.AddComponent(new Transform2D
+            {
+                Position = new Position2D
+                {
+                    Value = new Vector2(
+                        (rng.NextSingle() - 0.5f) * 1200.0f,
+                        (rng.NextSingle() - 0.5f) * 640.0f)
+                },
+                Scale = new Scale2D { Value = new Vector2(size, size) }
+            });
+            sprite.AddComponent(new ZIndex { Value = n });
+        }
     }
 
 #endregion

@@ -40,4 +40,21 @@ public partial struct Sprite2D
     public RgbaByte Tint;
 
 #endregion
+
+#region Constructor
+
+    /// <summary>
+    /// Creates a Sprite2D with white tint and full-texture UVs.
+    /// Mesh / Material / Texture remain at pool slot 0 (UnitQuad / DefaultMaterial / WhiteTexture).
+    /// </summary>
+    public Sprite2D()
+    {
+        Mesh = default;
+        Material = default;
+        Texture = default;
+        UV = UVRect.Full;
+        Tint = RgbaByte.White;
+    }
+
+#endregion
 }

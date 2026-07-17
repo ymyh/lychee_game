@@ -12,16 +12,16 @@ public static class Program
     {
         Console.WriteLine("=== lychee_game Resource Pool Tests ===\n");
 
-        TestResourcePool();
+        TestAssetPool();
         TestMesh2DCreation();
         TestTexture2DCreation();
 
         Console.WriteLine("\n=== All Tests Passed ===");
     }
 
-    private static void TestResourcePool()
+    private static void TestAssetPool()
     {
-        Console.WriteLine("Testing ResourcePool...");
+        Console.WriteLine("Testing AssetPool...");
 
         var meshList = new Mesh2DList();
 
@@ -79,7 +79,7 @@ public static class Program
             Console.WriteLine("  TryGet correctly failed after release");
         }
 
-        Console.WriteLine("  ResourcePool tests passed!\n");
+        Console.WriteLine("  AssetPool tests passed!\n");
     }
 
     private static void TestMesh2DCreation()

@@ -4,7 +4,7 @@ namespace lychee_game.resources._2d;
 
 /// <summary>
 /// Key for identifying unique graphics pipeline configurations.
-/// PipelineKey includes Effect and SamplerState from Material.
+/// PipelineKey includes Effect and SamplerState from Material, plus depth/stencil state.
 /// </summary>
 public sealed class PipelineKey : IEquatable<PipelineKey>
 {
@@ -40,6 +40,49 @@ public sealed class PipelineKey : IEquatable<PipelineKey>
     /// </summary>
     public SDL.SDL_GPUSampleCount SampleCount { get; init; }
 
+    /// <summary>
+    /// Depth/stencil texture format of the render pass target.
+    /// Must match the depth texture bound in BeginGPURenderPass when
+    /// <see cref="HasDepthStencilTarget"/> is true; otherwise INVALID.
+    /// </summary>
+    public SDL.SDL_GPUTextureFormat DepthFormat { get; init; }
+
+    /// <summary>
+    /// Whether the pipeline declares a depth/stencil render target.
+    /// Must match whether the current pass attaches a depth/stencil texture.
+    /// </summary>
+    public bool HasDepthStencilTarget { get; init; } = true;
+
+    /// <summary>
+    /// Enables depth testing in the graphics pipeline.
+    /// </summary>
+    public bool DepthTest { get; init; }
+
+    /// <summary>
+    /// Enables depth writes in the graphics pipeline.
+    /// </summary>
+    public bool DepthWrite { get; init; } = true;
+
+    /// <summary>
+    /// Enables stencil testing in the graphics pipeline.
+    /// </summary>
+    public bool StencilTest { get; init; }
+
+    /// <summary>
+    /// Depth comparison operation when <see cref="DepthTest"/> is enabled.
+    /// </summary>
+    public SDL.SDL_GPUCompareOp DepthCompareOp { get; init; } = SDL.SDL_GPUCompareOp.SDL_GPU_COMPAREOP_LESS;
+
+    /// <summary>
+    /// Stencil compare mask.
+    /// </summary>
+    public byte CompareMask { get; init; } = 0xFF;
+
+    /// <summary>
+    /// Stencil write mask.
+    /// </summary>
+    public byte WriteMask { get; init; } = 0xFF;
+
 #endregion
 
 #region Equality
@@ -57,7 +100,15 @@ public sealed class PipelineKey : IEquatable<PipelineKey>
                VertexAttributeHash == other.VertexAttributeHash &&
                BlendEnabled == other.BlendEnabled &&
                ColorFormat == other.ColorFormat &&
-               SampleCount == other.SampleCount;
+               SampleCount == other.SampleCount &&
+               DepthFormat == other.DepthFormat &&
+               HasDepthStencilTarget == other.HasDepthStencilTarget &&
+               DepthTest == other.DepthTest &&
+               DepthWrite == other.DepthWrite &&
+               StencilTest == other.StencilTest &&
+               DepthCompareOp == other.DepthCompareOp &&
+               CompareMask == other.CompareMask &&
+               WriteMask == other.WriteMask;
     }
 
     /// <inheritdoc/>
@@ -69,7 +120,22 @@ public sealed class PipelineKey : IEquatable<PipelineKey>
     /// <inheritdoc/>
     public override int GetHashCode()
     {
-        return HashCode.Combine(Effect, Sampler, VertexAttributeHash, BlendEnabled, ColorFormat, SampleCount);
+        var hash = new HashCode();
+        hash.Add(Effect);
+        hash.Add(Sampler);
+        hash.Add(VertexAttributeHash);
+        hash.Add(BlendEnabled);
+        hash.Add(ColorFormat);
+        hash.Add(SampleCount);
+        hash.Add(DepthFormat);
+        hash.Add(HasDepthStencilTarget);
+        hash.Add(DepthTest);
+        hash.Add(DepthWrite);
+        hash.Add(StencilTest);
+        hash.Add(DepthCompareOp);
+        hash.Add(CompareMask);
+        hash.Add(WriteMask);
+        return hash.ToHashCode();
     }
 
 #endregion
@@ -153,9 +219,12 @@ public sealed class PipelineCache
             },
             depth_stencil_state = new SDL.SDL_GPUDepthStencilState
             {
-                enable_depth_test = false,
-                enable_depth_write = false,
-                enable_stencil_test = false
+                enable_depth_test = key.DepthTest,
+                enable_depth_write = key.DepthWrite,
+                enable_stencil_test = key.StencilTest,
+                compare_op = key.DepthCompareOp,
+                compare_mask = key.CompareMask,
+                write_mask = key.WriteMask
             }
         };
 
@@ -168,7 +237,10 @@ public sealed class PipelineCache
                 {
                     color_target_descriptions = pTargets,
                     num_color_targets = 1,
-                    has_depth_stencil_target = false
+                    depth_stencil_format = key.HasDepthStencilTarget
+                        ? key.DepthFormat
+                        : SDL.SDL_GPUTextureFormat.SDL_GPU_TEXTUREFORMAT_INVALID,
+                    has_depth_stencil_target = key.HasDepthStencilTarget
                 };
                 pipeline = device.CreatePipeline(ref ci);
             }

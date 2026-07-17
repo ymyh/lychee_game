@@ -3,9 +3,9 @@ using lychee_game.components._2d;
 namespace lychee_game.resources._2d;
 
 /// <summary>
-/// Resource pool for Material assets (Effect + SamplerState combinations).
+/// Asset pool for Material resources (Effect + SamplerState combinations).
 /// </summary>
-public sealed class MaterialList : ResourcePool<Material, MaterialRef>
+public sealed class MaterialList : AssetPool<Material, MaterialRef>
 {
 #region Protected Methods
 

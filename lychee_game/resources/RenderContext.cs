@@ -1,10 +1,12 @@
 using System.Numerics;
+using lychee_game.resources._2d;
 
 namespace lychee_game.resources;
 
 /// <summary>
 /// Holds the current frame's GPU rendering context.
-/// Populated by BeginFrameSystem, cleared by EndFrameSystem.
+/// Command buffer is acquired by BeginFrameSystem; the render pass is begun by BeginRenderPassSystem
+/// and ended by EndFrameSystem.
 /// </summary>
 public sealed class RenderContext
 {
@@ -31,6 +33,21 @@ public sealed class RenderContext
     public uint SwapchainHeight { get; internal set; }
 
     /// <summary>
+    /// The current frame's depth/stencil texture handle (recreated on swapchain resize).
+    /// </summary>
+    public IntPtr DepthTexture { get; internal set; }
+
+    /// <summary>
+    /// The current depth texture width in pixels.
+    /// </summary>
+    public uint DepthWidth { get; internal set; }
+
+    /// <summary>
+    /// The current depth texture height in pixels.
+    /// </summary>
+    public uint DepthHeight { get; internal set; }
+
+    /// <summary>
     /// The active render pass handle (non-zero between Begin and End).
     /// </summary>
     public IntPtr RenderPass { get; internal set; }
@@ -44,6 +61,17 @@ public sealed class RenderContext
     /// Whether a frame is currently active (between BeginFrame and EndFrame).
     /// </summary>
     public bool FrameActive { get; internal set; }
+
+    /// <summary>
+    /// Number of GPU draw calls issued during the current frame's submit.
+    /// </summary>
+    public int DrawCallCount { get; set; }
+
+    /// <summary>
+    /// Depth/stencil attachment and pipeline settings for the current frame's render pass.
+    /// Change before <c>BeginRenderPassSystem</c> runs. Defaults to <see cref="DepthStencilSettings.Default2D"/>.
+    /// </summary>
+    public DepthStencilSettings DepthStencil { get; set; } = DepthStencilSettings.Default2D;
 
 #endregion
 }

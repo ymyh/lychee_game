@@ -6,6 +6,7 @@ namespace lychee_game.components._2d;
 
 /// <summary>
 /// UV rectangle for sprite sheet cropping. Defaults to full texture (0,0)-(1,1).
+/// V increases upward to match the engine's Y-up world space.
 /// </summary>
 [Component]
 public partial struct UVRect
@@ -13,12 +14,12 @@ public partial struct UVRect
 #region Public Fields
 
     /// <summary>
-    /// Minimum UV coordinates (top-left corner).
+    /// Minimum UV coordinates (typically bottom-left of the cropped region).
     /// </summary>
     public Vector2 Min;
 
     /// <summary>
-    /// Maximum UV coordinates (bottom-right corner).
+    /// Maximum UV coordinates (typically top-right of the cropped region).
     /// </summary>
     public Vector2 Max;
 
@@ -34,6 +35,10 @@ public partial struct UVRect
         Min = min;
         Max = max;
     }
+
+#endregion
+
+#region Static Properties
 
     /// <summary>
     /// Creates a full-texture UVRect (0,0)-(1,1).

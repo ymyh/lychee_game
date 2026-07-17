@@ -62,9 +62,9 @@ public struct RgbaByte
 
 /// <summary>
 /// Default 2D vertex with position, texture coordinates, and color.
-/// Layout: Position(FLOAT2) + TexCoord(FLOAT2) + Color(UBYTE4_NORM), pitch=24 bytes.
+/// Layout: Position(FLOAT2) + TexCoord(FLOAT2) + Color(UBYTE4_NORM), pitch = 20 bytes.
 /// </summary>
-[StructLayout(LayoutKind.Sequential)]
+[StructLayout(LayoutKind.Sequential, Pack = 4)]
 public struct Vertex2D
 {
 #region Public Fields
