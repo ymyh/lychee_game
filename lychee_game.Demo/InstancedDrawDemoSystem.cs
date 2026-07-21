@@ -6,11 +6,11 @@ using lychee_game.components._2d;
 namespace lychee_game.Demo;
 
 /// <summary>
-/// One-time startup system that creates the demo scene:
+/// One-time startup system for the instanced-draw demo:
 /// a main camera and 100 randomly placed white quads.
 /// </summary>
 [AutoImplSystem]
-public partial class DemoSetupSystem
+public partial class InstancedDrawDemoSystem
 {
 #region Execute
 
