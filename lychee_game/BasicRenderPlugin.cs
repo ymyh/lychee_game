@@ -272,7 +272,7 @@ public sealed class BasicRenderPlugin(BasicRenderPluginDescriptor desc) : IPlugi
 
 /// <summary>
 /// Built-in shader bytecode for default rendering.
-/// Loads from embedded resources compiled from GLSL (SPIRV) or HLSL (DXIL).
+/// Loads from embedded resources compiled from Slang (SPIRV and DXIL).
 /// </summary>
 internal static class DefaultShaders
 {

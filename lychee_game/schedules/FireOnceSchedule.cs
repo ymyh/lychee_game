@@ -12,7 +12,7 @@ public sealed class FireOnceSchedule(
     string name,
     BasicSchedule.ExecutionModeEnum executionMode = BasicSchedule.ExecutionModeEnum.SingleThread,
     BasicSchedule.CommitPointEnum commitPoint = BasicSchedule.CommitPointEnum.Synchronization)
-    : BasicSchedule(app, name, executionMode, commitPoint)
+    : ConditionalSchedule(app, name, executionMode, commitPoint)
 {
 #region Private Fields
 
@@ -20,18 +20,17 @@ public sealed class FireOnceSchedule(
 
 #endregion
 
-#region ISchedule Implementations
+#region ConditionalSchedule Implementations
 
-    /// <summary>
-    /// Executes the schedule once, then goes idle until <see cref="Reset"/> is called.
-    /// </summary>
-    public override void Execute()
+    protected override bool Predicate()
     {
         if (!fired)
         {
             fired = true;
-            DoExecute();
+            return true;
         }
+
+        return false;
     }
 
 #endregion
